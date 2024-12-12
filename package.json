@@ -1,0 +1,29 @@
+{
+  "type": "module",
+  "private": "false",
+  "name": "state-resource",
+  "version": "0.0.2",
+  "description": "Async state resource management",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "exports": {
+    "import": "./dist/index.js",
+    "require": "./dist/index.cjs"
+  },
+  "browser": "dist/index.global.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --minify",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "prepublish": "npm run build && npm version patch",
+    "publish": "npm publish --access public"
+  },
+  "author": "Danilo Castro",
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
