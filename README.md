@@ -14,3 +14,9 @@ dist
 ├── index.global.js   # iife
 └── index.cjs         # cjs
 ```
+
+## Publish
+
+```
+npm run publish
+```
