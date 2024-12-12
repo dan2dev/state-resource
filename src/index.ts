@@ -1,4 +1,4 @@
 export function useResource<T>() {
-    const state = { message: "project init" };
+    const state = { message: "initial project" };
     return { state };
 }
