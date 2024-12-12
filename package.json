@@ -12,11 +12,11 @@
   "browser": "dist/index.global.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsup --minify",
+    "build": "tsup --minify && npm version patch",
     "dev": "tsup --watch",
     "test": "vitest",
-    "prepublish": "npm run build && npm version patch",
-    "deploy": "npm publish"
+    "prepublish": "npm run build",
+    "publish": "npm publish --access public"
   },
   "author": "Danilo Castro",
   "license": "MIT",
