@@ -15,7 +15,7 @@
     "build": "tsup --minify",
     "dev": "tsup --watch",
     "test": "vitest",
-    "prepublish": "npm run build",
+    "prepublish": "npm run build && npm version patch",
     "publish": "npm version patch && npm publish --access public"
   },
   "author": "Danilo Castro",
