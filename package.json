@@ -16,7 +16,7 @@
     "dev": "tsup --watch",
     "test": "vitest",
     "prepublish": "npm run build && npm version patch",
-    "publish": "npm version patch && npm publish --access public"
+    "publish": "npm publish --access public"
   },
   "author": "Danilo Castro",
   "license": "MIT",
