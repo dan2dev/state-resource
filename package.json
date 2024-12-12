@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "state-resource",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Async state resource management",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
