@@ -14,7 +14,8 @@
     "isbot": "^5.1.17",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router": "^7.0.2"
+    "react-router": "^7.0.2",
+    "state-resource": "^0.0.21"
   },
   "devDependencies": {
     "@react-router/dev": "^7.0.2",
@@ -26,7 +27,7 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",
-    "vite": "^6.0.3",
+    "vite": "^5.4.11",
     "vite-tsconfig-paths": "^5.1.4"
   }
 }
