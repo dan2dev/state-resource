@@ -1,6 +1,5 @@
 {
   "type": "module",
-  "private": "false",
   "name": "state-resource",
   "version": "0.0.2",
   "description": "Async state resource management",
@@ -16,8 +15,8 @@
     "build": "tsup --minify",
     "dev": "tsup --watch",
     "test": "vitest",
-    "prepublish": "npm run build && npm version patch",
-    "publish": "npm publish --access public"
+    "prepublish": "npm run build",
+    "publish": "npm version patch && npm publish --access public"
   },
   "author": "Danilo Castro",
   "license": "MIT",
