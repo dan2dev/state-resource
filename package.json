@@ -18,7 +18,7 @@
   "browser": "dist/index.global.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsup --minify && npm version patch",
+    "build": "tsup --minify",
     "dev": "tsup --watch",
     "test": "vitest",
     "publish": "npm run build"
