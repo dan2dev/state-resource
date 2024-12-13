@@ -1,19 +1,31 @@
-export function useResource<T>() {
-  const state = { message: "initial project" };
-  return { state };
-}
+import { use, useCallback, useRef, useState } from "react";
 
-export function store<T>(config: any) {
-  return () => {
-    return {
-      state: { message: "initial project" },
-    };
-  };
-}
+export type UseResourceReturn<T, TQuery extends any[] = []> = [
+  result: T,
+  setQuery: (...query: TQuery) => void,
+];
 
-if (typeof window !== "undefined" && typeof Worker !== "undefined") {
-  const worker = new Worker(new URL("state-resource/worker", import.meta.url));
-  console.log("Web Workers are supported in this environment.");
-} else {
-  console.log("Web Workers are not supported in this environment.");
+export function useResource<T>(
+  promise: () => Promise<T>,
+): UseResourceReturn<T, any[]>;
+export function useResource<T, TQuery extends any[]>(
+  promise: (...args: TQuery) => Promise<T>,
+): UseResourceReturn<T, TQuery>;
+export function useResource<T, TQuery extends any[]>(
+  promise: (...args: TQuery) => Promise<T>,
+): UseResourceReturn<T, TQuery> {
+  const [version, setVersion] = useState(0);
+  const initialRef = useRef(
+    new Promise<T>((resolve) => resolve({ data: "dados da api" } as T)),
+  );
+  const stateRef = useRef(initialRef.current);
+  const statePromise = use(stateRef.current);
+  const setQuery = useCallback(
+    (...query: TQuery) => {
+      stateRef.current = promise(...query);
+      setVersion((lastVersion) => lastVersion + 1);
+    },
+    [promise],
+  );
+  return [statePromise, setQuery];
 }
