@@ -1,0 +1,3 @@
+[submodule "state-resource"]
+	path = state-resource
+	url = git@github.com:dan2dev/state-resource.git
