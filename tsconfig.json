@@ -1,17 +1,29 @@
 {
-    "include": ["src"],
-    "exclude": ["**/*.test.ts"],
-    "compilerOptions": {
-      "module": "esnext",
-      "target": "esnext",
-      "lib": ["esnext"],
-      "declaration": true,
-      "strict": true,
-      "moduleResolution": "node",
-      "skipLibCheck": true,
-      "esModuleInterop": true,
-      "outDir": "dist",
-      "rootDir": "src"
-    }
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "**/*.test.ts"
+  ],
+  "compilerOptions": {
+    "module": "esnext",
+    "target": "esnext",
+    "lib": [
+      "ES2020",
+      "esnext",
+      "dom",
+      "WebWorker",
+      "WebWorker.ImportScripts",
+      "WebWorker.AsyncIterable"
+    ],
+    "declaration": true,
+    "strict": true,
+    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "outDir": "dist",
+    "rootDir": "src"
   }
-
+}

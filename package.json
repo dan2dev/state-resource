@@ -6,8 +6,14 @@
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "exports": {
-    "import": "./dist/index.js",
-    "require": "./dist/index.cjs"
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./worker": {
+      "import": "./dist/worker.js",
+      "require": "./dist/worker.cjs"
+    }
   },
   "browser": "dist/index.global.js",
   "types": "dist/index.d.ts",
@@ -20,10 +26,16 @@
   "author": "Danilo Castro",
   "license": "MIT",
   "devDependencies": {
+    "@eslint/js": "^9.16.0",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
+    "eslint": "^9.16.0",
+    "eslint-plugin-react": "^7.37.2",
+    "globals": "^15.13.0",
+    "prettier": "^3.4.2",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
     "vitest": "^2.1.8"
   },
   "peerDependencies": {
