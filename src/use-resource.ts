@@ -10,13 +10,6 @@ export type ResourceState<T> = {
   queryHash: string;
   invalidate?: () => void;
 };
-function getResourceState<T>(id: string): ResourceState<T> {
-  const state = resourceMap.get(id);
-  if (!state) {
-    throw new Error(`Resource ${id} not found`);
-  }
-  return state;
-}
 
 export const resourceMap = new Map<string, ResourceState<any>>();
 
@@ -39,24 +32,25 @@ export function useResource<T, TQuery extends any[]>(
   const setQuery = useCallback(
     (...query: TQuery) => {
       const queryHash = JSON.stringify(query);
-      const resource = resourceMap.get(resourceId);
+      let resource = resourceMap.get(resourceId);
       if (!resource) {
         resourceMap.set(resourceId, {
           id: resourceId,
-          queryHash: JSON.stringify(query),
-          invalidate: !!id
-            ? () => setVersion((lastVersion) => lastVersion + 1)
-            : undefined,
+          queryHash: "",
         });
       }
+      resource = resourceMap.get(resourceId);
 
       if (resource && resource.queryHash !== queryHash) {
         stateRef.current = promise(...query);
         resourceMap.set(resourceId, {
           id: resourceId,
           queryHash,
-          invalidate: !!id
-            ? (() => setQuery(...query)).bind(setQuery)
+          invalidate: id
+            ? (() => {
+                stateRef.current = promise(...query);
+                setVersion((lastVersion) => lastVersion + 1);
+              }).bind(setQuery)
             : undefined,
         });
         setVersion((lastVersion) => lastVersion + 1);
