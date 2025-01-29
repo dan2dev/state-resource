@@ -7,8 +7,9 @@ export type UseResourceReturn<T, TQuery extends any[] = []> = [
 
 export type ResourceState<T> = {
   id: string;
-  queryHash: string;
+  queryHash: string | null;
   invalidate?: () => void;
+  state: T;
 };
 
 export const resourceMap = new Map<string, ResourceState<any>>();
@@ -25,7 +26,7 @@ export function useResource<T, TQuery extends any[]>(
 ): UseResourceReturn<T, TQuery> {
   const resourceId = !id ? useId() : id;
   const [version, setVersion] = useState(0);
-  const initialRef = useRef(new Promise<T>((resolve) => resolve({} as T)));
+  const initialRef = useRef(new Promise<T>((resolve) => id && resourceMap.has(id) ? resourceMap.get(id)!.state || resolve({} as T) : resolve({} as T)));
   const stateRef = useRef(initialRef.current);
   const statePromise = use(stateRef.current);
 
@@ -36,7 +37,8 @@ export function useResource<T, TQuery extends any[]>(
       if (!resource) {
         resourceMap.set(resourceId, {
           id: resourceId,
-          queryHash: "",
+          queryHash: null,
+          state: initialRef.current,
         });
       }
       resource = resourceMap.get(resourceId);
@@ -46,17 +48,23 @@ export function useResource<T, TQuery extends any[]>(
         resourceMap.set(resourceId, {
           id: resourceId,
           queryHash,
+          state: stateRef.current,
           invalidate: id
             ? (() => {
-                stateRef.current = promise(...query);
-                setVersion((lastVersion) => lastVersion + 1);
-              }).bind(setQuery)
+              stateRef.current = promise(...query);
+              const lastResource = resourceMap.get(resourceId);
+              if (lastResource) {
+                lastResource.state = stateRef.current;
+                resourceMap.set(resourceId, lastResource);
+              }
+              setVersion((lastVersion) => lastVersion + 1);
+            }).bind(setQuery)
             : undefined,
         });
         setVersion((lastVersion) => lastVersion + 1);
       }
     },
-    [promise, resourceId, id],
+    [promise, resourceId, id, version],
   );
 
   return [statePromise, setQuery];
