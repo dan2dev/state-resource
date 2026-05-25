@@ -1,2 +1,2 @@
-import { invalidate, useResource } from "./use-resource";
-export { invalidate, useResource };
+export { createQuery, invalidate } from './query';
+export type { Query } from './query';
