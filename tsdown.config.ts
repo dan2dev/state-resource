@@ -9,4 +9,6 @@ export default defineConfig({
   minify: true,
   sourcemap: true,
   globalName: 'StateResource',
+  deps: { neverBundle: ['react'] },
+  outputOptions: { globals: { react: 'React' } },
 })
