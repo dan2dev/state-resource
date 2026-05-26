@@ -374,21 +374,6 @@ useQuery(userQuery, ['not-a-number']) // ✗ Argument of type 'string' is not as
 
 ---
 
-## Release
-
-```bash
-make release-patch   # 0.3.0 → 0.3.1
-make release-minor   # 0.3.0 → 0.4.0
-make release-major   # 0.3.0 → 1.0.0
-
-# or with explicit bump:
-make publish BUMP=minor
-```
-
-Each release: builds, bumps `package.json`, commits, publishes to npm, tags, and pushes.
-
----
-
 ## License
 
 MIT
