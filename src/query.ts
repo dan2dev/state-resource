@@ -50,7 +50,9 @@ export function createQuery<A extends unknown[], R>(
     const p = fn(...args);
     cache!.set(key, p);
     refetcherMap!.set(key, () => load(...args));
-    p.catch(() => { cache!.delete(key); refetcherMap!.delete(key); });
+    p.catch(() => {
+      if (cache!.get(key) === p) { cache!.delete(key); refetcherMap!.delete(key); }
+    });
     return p;
   };
 
