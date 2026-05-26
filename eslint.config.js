@@ -1,25 +1,109 @@
+import js from "@eslint/js";
 import globals from "globals";
-import pluginJs from "@eslint/js";
 import tseslint from "typescript-eslint";
-import pluginReact from "eslint-plugin-react";
+import json from "@eslint/json";
+import markdown from "@eslint/markdown";
+import css from "@eslint/css";
+import reactHooks from "eslint-plugin-react-hooks";
 
-function onlyWarns(config) {
-  return {
-    ...config,
-    rules: Object.fromEntries(
-      Object.entries(config.rules || {}).map(([key, value]) => [
-        key,
-        value === "error" ? "warn" : value,
-      ]),
-    ),
-  };
-}
-
-/** @type {import('eslint').Linter.Config[]} */
 export default [
-  { files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"] },
-  { languageOptions: { globals: { ...globals.browser, ...globals.node } } },
-  ...onlyWarns(pluginJs.configs.recommended),
-  ...onlyWarns(tseslint.configs.recommended),
-  ...onlyWarns(pluginReact.configs.flat.recommended),
+  {
+    ignores: ["dist/**", "coverage/**", "**/*.min.js", "README.md", ".claude/**"],
+  },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    files: ["**/*.{js,mjs,cjs,ts,mts,cts}"],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
+    },
+  },
+  {
+    files: ["**/*.ts", "**/*.d.ts"],
+    rules: {
+      "no-undef": "off",
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx,js,jsx}", "types/**/*.{ts,d.ts}"],
+    rules: {
+      "@typescript-eslint/triple-slash-reference": "off",
+    },
+  },
+  {
+    files: ["**/*.{ts,tsx,js,jsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: { ...reactHooks.configs.recommended.rules },
+  },
+  {
+    files: ["**/*.json"],
+    ...json.configs.recommended,
+  },
+  {
+    files: ["**/*.jsonc"],
+    ...json.configs.recommended,
+    language: "json/jsonc",
+  },
+  {
+    files: ["**/*.json5"],
+    ...json.configs.recommended,
+    language: "json/json5",
+  },
+  {
+    files: ["**/*.md"],
+    processor: markdown.processors.markdown,
+  },
+  ...markdown.configs.recommended,
+  {
+    files: ["**/*.md", "**/*.md/*.js", "**/*.md/*.ts"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-unused-expressions": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+      "no-unused-expressions": "off",
+      "no-unused-vars": "off",
+    },
+  },
+  {
+    files: ["**/*.json", "**/*.jsonc", "**/*.json5"],
+    rules: {
+      "@typescript-eslint/no-unused-expressions": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+      "no-unused-expressions": "off",
+      "no-unused-vars": "off",
+    },
+  },
+  {
+    files: ["**/*.css"],
+    ...css.configs.recommended,
+  },
+  {
+    files: ["**/*.{ts,mts,cts,tsx}", "**/*.d.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/no-unused-expressions": "warn",
+      "@typescript-eslint/no-unsafe-function-type": "warn",
+      "no-unused-vars": "off",
+      "no-undef": "off",
+      "no-console": "warn",
+    },
+  },
+  {
+    files: ["**/*.{js,mjs,cjs,jsx}"],
+    rules: {
+      "no-unused-vars": "warn",
+      "no-unused-expressions": "warn",
+      "no-undef": "warn",
+      "no-console": "warn",
+    },
+  },
+  {
+    linterOptions: {
+      reportUnusedDisableDirectives: "warn",
+    },
+  },
 ];
