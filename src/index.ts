@@ -19,6 +19,7 @@ export function useQuery<A extends unknown[], R>(
 ): QueryResult<R> {
   const argsKey = stableKey(args)
   const argsRef = useRef(args)
+  // eslint-disable-next-line react-hooks/refs
   argsRef.current = args
 
   const [tick, setTick] = useState(0)
@@ -26,11 +27,11 @@ export function useQuery<A extends unknown[], R>(
 
   useEffect(() => {
     return subscribe(query.cacheId, argsKey, () => setTick(t => t + 1))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query.cacheId, argsKey])
 
   useEffect(() => {
     let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setState(s => (s.status !== 'loading' ? { status: 'loading', data: s.data } : s))
     query(...argsRef.current).then(
       data => { if (!cancelled) setState({ status: 'ok', data }) },
