@@ -427,6 +427,70 @@ describe('useQuery – refresh', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// setData
+// ═══════════════════════════════════════════════════════════════════
+describe('useQuery – setData', () => {
+  it('setData replaces current data', async () => {
+    const query = createQuery(uid(), async () => 'original');
+    const { result } = renderHook(() => useQuery(query, []));
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('ok');
+    });
+
+    act(() => {
+      result.current.setData('updated');
+    });
+
+    expect(result.current.status).toBe('ok');
+    expect(result.current.data).toBe('updated');
+  });
+
+  it('setData updater receives previous value', async () => {
+    const query = createQuery(uid(), async () => 2);
+    const { result } = renderHook(() => useQuery(query, []));
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('ok');
+    });
+
+    act(() => {
+      result.current.setData(prev => (prev ?? 0) + 3);
+    });
+
+    expect(result.current.status).toBe('ok');
+    expect(result.current.data).toBe(5);
+  });
+
+  it('setData updates all hook instances with the same query key', async () => {
+    const fn = vi.fn(async () => ({ count: 1 }));
+    const query = createQuery(uid(), fn);
+
+    const { result: r1 } = renderHook(() => useQuery(query, []));
+    const { result: r2 } = renderHook(() => useQuery(query, []));
+
+    await waitFor(() => {
+      expect(r1.current.status).toBe('ok');
+    });
+    await waitFor(() => {
+      expect(r2.current.status).toBe('ok');
+    });
+
+    act(() => {
+      r1.current.setData(prev => ({ count: (prev?.count ?? 0) + 1 }));
+    });
+
+    await waitFor(() => {
+      expect(r2.current.status).toBe('ok');
+    });
+
+    expect(r1.current.data.count).toBe(2);
+    expect(r2.current.data.count).toBe(2);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // Global invalidate integration with useQuery
 // ═══════════════════════════════════════════════════════════════════
 describe('useQuery – global invalidate', () => {

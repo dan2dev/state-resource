@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { subscribe } from './query';
+import { subscribe, readSnapshot, setQueryData } from './query';
 import type { Query } from './query';
 import { stableKey } from './utils';
 export { createQuery, invalidate } from './query';
@@ -11,7 +11,10 @@ export type QueryState<T> =
   | { status: 'error'; data?: undefined | T; error: Error }
 
 /** QueryState<T> with the `refresh` callback included. */
-export type QueryResult<T> = QueryState<T> & { refresh: () => void }
+export type QueryResult<T> = QueryState<T> & {
+  refresh: () => void;
+  setData: (next: T | ((prev: T | undefined) => T)) => T;
+}
 
 export function useQuery<A extends unknown[], R>(
   query: Query<A, R>,
@@ -19,30 +22,41 @@ export function useQuery<A extends unknown[], R>(
 ): QueryResult<R> {
   const argsKey = stableKey(args)
   const argsRef = useRef(args)
+  const keyRef = useRef(argsKey)
   // eslint-disable-next-line react-hooks/refs
   argsRef.current = args
+  // eslint-disable-next-line react-hooks/refs
+  keyRef.current = argsKey
 
-  const [tick, setTick] = useState(0)
-  const [state, setState] = useState<QueryState<R>>({ status: 'loading' })
+  const [state, setState] = useState<QueryState<R>>(
+    () => readSnapshot<R>(query.cacheId, argsKey) ?? { status: 'loading' },
+  )
 
   useEffect(() => {
-    return subscribe(query.cacheId, argsKey, () => setTick(t => t + 1))
+    const syncFromSnapshot = () => {
+      const snapshot = readSnapshot<R>(query.cacheId, argsKey)
+      if (!snapshot) return
+      if (snapshot.status === 'loading' && snapshot.data === undefined) {
+        setState(prev => (prev.data === undefined ? snapshot : { status: 'loading', data: prev.data }))
+        return
+      }
+      setState(snapshot)
+    }
+
+    const unsubscribe = subscribe(query.cacheId, argsKey, syncFromSnapshot)
+    syncFromSnapshot()
+    return unsubscribe
   }, [query.cacheId, argsKey])
 
   useEffect(() => {
-    let cancelled = false
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setState(s => (s.status !== 'loading' ? { status: 'loading', data: s.data } : s))
-    query(...argsRef.current).then(
-      data => { if (!cancelled) setState({ status: 'ok', data }) },
-      err => {
-        if (!cancelled)
-          setState({ status: 'error', error: err instanceof Error ? err : new Error(String(err)) })
-      },
-    )
-    return () => { cancelled = true }
+    const snapshot = readSnapshot<R>(query.cacheId, argsKey)
+    if (!snapshot) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setState(s => (s.status !== 'loading' ? { status: 'loading', data: s.data } : s))
+    }
+    void query(...argsRef.current).catch(() => undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, argsKey])
+  }, [query.cacheId, argsKey])
 
   const refresh = useCallback(() => {
     query.invalidate(...argsRef.current)
@@ -50,5 +64,9 @@ export function useQuery<A extends unknown[], R>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [argsKey])
 
-  return { ...state, refresh }
+  const setData = useCallback((next: R | ((prev: R | undefined) => R)) => {
+    return setQueryData(query.cacheId, keyRef.current, next)
+  }, [query.cacheId])
+
+  return { ...state, refresh, setData }
 }
