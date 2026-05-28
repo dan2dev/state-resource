@@ -1,6 +1,8 @@
 # state-resource
 
-Promise caching, deduplication, and invalidation with a React hook — no context, no provider, no boilerplate.
+Promise caching, deduplication, invalidation, and shared query state updates with a React hook.
+
+No context, no provider, no boilerplate.
 
 ```bash
 npm i state-resource
@@ -9,6 +11,17 @@ bun add state-resource
 ```
 
 React is an optional peer dependency. The core cache (`createQuery` / `invalidate`) works in any environment.
+
+---
+
+## Highlights
+
+- Promise-level request deduplication by argument key
+- Stale-while-revalidate behavior in `useQuery`
+- Per-entry refresh and global invalidation
+- Shared state mutation via `useQuery(...).setData(...)`
+- Fully typed APIs (arguments and data inferred end-to-end)
+- Works without React for cache-only use cases
 
 ---
 
@@ -34,7 +47,12 @@ function UserCard({ userId }: { userId: number }) {
   if (user.status === 'loading') return <Spinner />
   if (user.status === 'error')   return <p>Error: {user.error.message}</p>
 
-  return <p>{user.data.name}</p>
+  return (
+    <div>
+      <p>{user.data.name}</p>
+      <button onClick={user.refresh}>Refresh</button>
+    </div>
+  )
 }
 ```
 
@@ -44,7 +62,7 @@ function UserCard({ userId }: { userId: number }) {
 
 ### `createQuery(cacheId, fn)`
 
-Creates a typed, cached async query.
+Creates a typed cached query function.
 
 ```ts
 const userQuery = createQuery('users', async (id: number) => {
@@ -60,12 +78,12 @@ const userQuery = createQuery('users', async (id: number) => {
 
 Returns a `Query<A, R>` — a callable function with extra methods:
 
-| Member              | Description                                              |
-| ------------------- | -------------------------------------------------------- |
-| `query(...args)`    | Call to get the cached promise (or start a new fetch)   |
-| `query.invalidate(...args)` | Refetch a specific cache entry and notify subscribers |
-| `query.clear()`     | Wipe all cached entries for this query                  |
-| `query.cacheId`     | Read-only string, the ID passed at creation             |
+| Member | Description |
+| --- | --- |
+| `query(...args)` | Returns cached promise for args, or starts a new fetch |
+| `query.invalidate(...args)` | Refetches one cache entry and notifies listeners for that key |
+| `query.clear()` | Clears all cached promises, refetchers, and snapshots for this `cacheId` |
+| `query.cacheId` | Read-only cache ID |
 
 **Caching is argument-based.** The same arguments always return the same promise. Object argument key order is normalized, so `{ a: 1, b: 2 }` and `{ b: 2, a: 1 }` hit the same cache entry.
 
@@ -80,7 +98,7 @@ userQuery(1) !== userQuery(2)  // different args → different entries
 
 ### `invalidate(target)`
 
-Global invalidation: refetches every cached entry for a query and notifies all subscribers.
+Global invalidation: refetches every cached entry currently known for a query.
 
 ```ts
 import { invalidate } from 'state-resource'
@@ -92,13 +110,13 @@ invalidate('users')
 invalidate(userQuery)
 ```
 
-Use this after a mutation that affects multiple cached entries at once — e.g. after saving a user, invalidate the whole users query.
+Use this after a mutation that affects multiple entries at once.
 
 ---
 
 ### `useQuery(query, args)`
 
-React hook. Subscribes to a query and returns its current state.
+React hook for subscribing to one query entry.
 
 ```tsx
 const result = useQuery(userQuery, [userId])
@@ -108,15 +126,56 @@ Returns `QueryResult<T>`:
 
 ```ts
 type QueryResult<T> =
-  | { status: 'loading'; data?: T;         error?: undefined; refresh: () => void }
-  | { status: 'ok';      data: T;          error?: undefined; refresh: () => void }
-  | { status: 'error';   data?: T;         error: Error;      refresh: () => void }
+  | {
+      status: 'loading'
+      data?: T
+      error?: undefined
+      refresh: () => void
+      setData: (next: T | ((prev: T | undefined) => T)) => T
+    }
+  | {
+      status: 'ok'
+      data: T
+      error?: undefined
+      refresh: () => void
+      setData: (next: T | ((prev: T | undefined) => T)) => T
+    }
+  | {
+      status: 'error'
+      data?: T
+      error: Error
+      refresh: () => void
+      setData: (next: T | ((prev: T | undefined) => T)) => T
+    }
 ```
 
 - **`status: 'loading'`** — fetch in progress. `data` carries the previous value while reloading (stale-while-revalidate).
 - **`status: 'ok'`** — fetch succeeded.
 - **`status: 'error'`** — fetch failed. Failed promise is evicted from cache so retry is clean.
-- **`refresh()`** — invalidates this entry and triggers a re-fetch. Reference is stable as long as args don't change.
+- **`refresh()`** — refetches this exact cache key. Reference is stable while args are stable.
+- **`setData(next | updater)`** — updates shared state for this key and re-renders all subscribers using the same query+args key.
+
+#### `setData` behavior
+
+- Accepts either a direct value or updater function
+- Updater receives the previous data (`T | undefined`)
+- Writes through to the query cache (future reads for the same key resolve to the updated value)
+- Notifies subscribers for the key immediately
+
+```tsx
+function UpvoteButton({ postId }: { postId: number }) {
+  const post = useQuery(postQuery, [postId])
+
+  return (
+    <button
+      disabled={post.status !== 'ok'}
+      onClick={() => post.setData(prev => ({ ...(prev ?? { id: postId, votes: 0 }), votes: (prev?.votes ?? 0) + 1 }))}
+    >
+      +1 vote
+    </button>
+  )
+}
+```
 
 ---
 
@@ -192,7 +251,38 @@ async function saveUser(user: User) {
 
 ---
 
-### 4 · Multi-argument queries
+### 4 · Shared optimistic updates with `setData`
+
+All components subscribed to the same key update immediately.
+
+```tsx
+function UserNameEditor({ userId }: { userId: number }) {
+  const user = useQuery(userQuery, [userId])
+
+  const rename = async (name: string) => {
+    if (user.status !== 'ok') return
+
+    // optimistic UI
+    user.setData({ ...user.data, name })
+
+    try {
+      await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      })
+      user.refresh() // reconcile with server
+    } catch {
+      user.refresh() // rollback by refetching
+    }
+  }
+
+  return <button onClick={() => rename('New Name')}>Rename</button>
+}
+```
+
+---
+
+### 5 · Multi-argument queries
 
 Arguments are spread, not wrapped — the type system enforces them at the call site.
 
@@ -209,7 +299,7 @@ const posts = useQuery(postsQuery, [userId, page])
 
 ---
 
-### 5 · Object arguments (stable key)
+### 6 · Object arguments (stable key)
 
 Object key order is normalized, so re-renders with structurally equal objects don't trigger a new fetch.
 
@@ -243,7 +333,7 @@ function SearchResults() {
 
 ---
 
-### 6 · Dependent queries
+### 7 · Dependent queries
 
 Load a user, then load their posts only once the userId is known. Switching back to a previously selected user is instant — both caches are warm.
 
@@ -279,7 +369,7 @@ function PostList({ userId }: { userId: number }) {
 
 ---
 
-### 7 · Error recovery
+### 8 · Error recovery
 
 Failed fetches are evicted from the cache automatically. Calling `refresh()` or changing args re-fetches cleanly.
 
@@ -304,7 +394,7 @@ function WeatherCard({ city }: { city: string }) {
 
 ---
 
-### 8 · Using the cache outside React
+### 9 · Using the cache outside React
 
 `createQuery` and `invalidate` are plain functions — no React required.
 
@@ -324,7 +414,7 @@ invalidate(configQuery)
 
 ---
 
-### 9 · Clearing the cache
+### 10 · Clearing the cache
 
 Use `query.clear()` to wipe all entries — useful on logout or when switching accounts.
 
@@ -336,6 +426,32 @@ async function logout() {
   userQuery.clear()
   postsQuery.clear()
   settingsQuery.clear()
+}
+```
+
+---
+
+### 11 · Manual filter on already-fetched data
+
+You can derive local view state from remote data without extra context stores.
+
+```tsx
+function FilteredUsers() {
+  const [search, setSearch] = useState('')
+  const users = useQuery(usersQuery, [{ search: '' }])
+
+  const applyLocalFilter = () => {
+    const needle = search.toLowerCase().trim()
+    users.setData(prev => (prev ?? []).filter(user => user.name.toLowerCase().includes(needle)))
+  }
+
+  return (
+    <div>
+      <input value={search} onChange={e => setSearch(e.target.value)} />
+      <button onClick={applyLocalFilter}>Filter Local Data</button>
+      <button onClick={users.refresh}>Refetch</button>
+    </div>
+  )
 }
 ```
 
@@ -363,14 +479,46 @@ useQuery(userQuery, ['not-a-number']) // ✗ Argument of type 'string' is not as
 
 ---
 
+## Exports
+
+```ts
+import {
+  createQuery,
+  invalidate,
+  useQuery,
+  type Query,
+  type QueryState,
+  type Snapshot,
+} from 'state-resource'
+```
+
+---
+
 ## How it works
 
-- **Cache** — a `Map<argsKey, Promise<R>>` per `cacheId`. The same args return the same promise instance.
-- **Stable key** — arguments are serialized with `JSON.stringify` with sorted object keys, so `{ a: 1, b: 2 }` and `{ b: 2, a: 1 }` map to the same key.
-- **Invalidation** — replaces the cache entry with a fresh promise and notifies all subscribers.
-- **Subscribers** — `useQuery` registers a listener that bumps a counter, triggering a re-render when its key is invalidated.
-- **Cancellation** — effects use a `cancelled` flag; stale fetch results are discarded after arg changes or unmount.
-- **Error eviction** — rejected promises are removed from the cache via a `.catch()` guard, so the next call always starts fresh.
+- **Promise cache**: `Map<cacheId, Map<argsKey, Promise<R>>>`
+- **Snapshots**: `Map<cacheId, Map<argsKey, Snapshot<R>>>` tracks `loading | ok | error` plus optional stale data
+- **Listeners**: subscribers are stored per cacheId + argsKey
+- **Stable keys**: generated via `stableKey(args)` with deterministic object-key ordering
+- **Fetch flow**:
+  - set `loading` snapshot
+  - run fetch
+  - set `ok` or `error` snapshot
+  - notify listeners for that key
+- **Error eviction**: on rejected fetch, promise cache entry is removed for clean retries
+- **React integration**: `useSyncExternalStore` subscribes components to key-level snapshot updates
+- **Shared mutation**: `setData` writes snapshot + cache and broadcasts key updates immediately
+
+---
+
+## Best practices
+
+- Use descriptive `cacheId` values (`users`, `posts`, `weather`) and keep them stable.
+- Keep args serializable and deterministic.
+- Use `refresh()` for entry-level revalidation.
+- Use `invalidate(queryOrCacheId)` after broad mutations.
+- Use `setData` for optimistic updates and local derivations, then `refresh()` to reconcile with server data when needed.
+- Call `query.clear()` on logout/account switch to avoid cross-user stale data.
 
 ---
 
