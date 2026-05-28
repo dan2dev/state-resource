@@ -1,5 +1,7 @@
 .PHONY: publish release-patch release-minor release-major version show-version ensure-clean bump-version help
 
+.DEFAULT_GOAL := help
+
 # BUMP can be: patch | minor | major (default patch if not provided)
 BUMP ?= patch
 
