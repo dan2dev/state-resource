@@ -1,72 +1,73 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { subscribe, readSnapshot, setQueryData } from './query';
-import type { Query } from './query';
+import type { Query, Snapshot } from './query';
 import { stableKey } from './utils';
+
 export { createQuery, invalidate } from './query';
-export type { Query } from './query';
+export type { Query, Snapshot } from './query';
 
-export type QueryState<T> =
-  | { status: 'loading'; data?: undefined | T; error?: undefined }
-  | { status: 'ok'; data: T; error?: undefined }
-  | { status: 'error'; data?: undefined | T; error: Error }
+export type QueryState<T> = Snapshot<T>;
 
-/** QueryState<T> with the `refresh` callback included. */
 export type QueryResult<T> = QueryState<T> & {
   refresh: () => void;
   setData: (next: T | ((prev: T | undefined) => T)) => T;
-}
+};
 
-export function useQuery<A extends unknown[], R>(
+const LOADING_FALLBACK: Snapshot<never> = { status: 'loading' };
+
+export function useQuery<A extends readonly unknown[], R>(
   query: Query<A, R>,
   args: NoInfer<A>,
 ): QueryResult<R> {
-  const argsKey = stableKey(args)
-  const argsRef = useRef(args)
-  const keyRef = useRef(argsKey)
-  // eslint-disable-next-line react-hooks/refs
-  argsRef.current = args
-  // eslint-disable-next-line react-hooks/refs
-  keyRef.current = argsKey
+  const argsKey = stableKey(args);
 
-  const [state, setState] = useState<QueryState<R>>(
-    () => readSnapshot<R>(query.cacheId, argsKey) ?? { status: 'loading' },
-  )
+  const argsRef = useRef(args);
+  const keyRef = useRef(argsKey);
+  // eslint-disable-next-line react-hooks/refs
+  argsRef.current = args;
+  // eslint-disable-next-line react-hooks/refs
+  keyRef.current = argsKey;
+
+  const subscribeToStore = useCallback(
+    (onChange: () => void) => subscribe(query.cacheId, argsKey, onChange),
+    [query.cacheId, argsKey],
+  );
+
+  const getSnapshot = useCallback(
+    (): Snapshot<R> => readSnapshot<R>(query.cacheId, argsKey) ?? (LOADING_FALLBACK as Snapshot<R>),
+    [query.cacheId, argsKey],
+  );
+
+  const snapshot = useSyncExternalStore(subscribeToStore, getSnapshot, getSnapshot);
+
+  // SWR across args changes: remember the most recently displayed data so the
+  // next loading state for a different key can render with stale data instead
+  // of flashing empty. Using state (not a ref) so React drives the comparison;
+  // the conditional setter avoids redundant re-renders.
+  const [sticky, setSticky] = useState<R | undefined>(undefined);
+  if (snapshot.status === 'ok' && sticky !== snapshot.data) {
+    setSticky(() => snapshot.data);
+  }
+
+  const view: Snapshot<R> =
+    snapshot.status === 'loading' && snapshot.data === undefined && sticky !== undefined
+      ? { status: 'loading', data: sticky }
+      : snapshot;
 
   useEffect(() => {
-    const syncFromSnapshot = () => {
-      const snapshot = readSnapshot<R>(query.cacheId, argsKey)
-      if (!snapshot) return
-      if (snapshot.status === 'loading' && snapshot.data === undefined) {
-        setState(prev => (prev.data === undefined ? snapshot : { status: 'loading', data: prev.data }))
-        return
-      }
-      setState(snapshot)
-    }
-
-    const unsubscribe = subscribe(query.cacheId, argsKey, syncFromSnapshot)
-    syncFromSnapshot()
-    return unsubscribe
-  }, [query.cacheId, argsKey])
-
-  useEffect(() => {
-    const snapshot = readSnapshot<R>(query.cacheId, argsKey)
-    if (!snapshot) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setState(s => (s.status !== 'loading' ? { status: 'loading', data: s.data } : s))
-    }
-    void query(...argsRef.current).catch(() => undefined)
+    void query(...argsRef.current).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query.cacheId, argsKey])
+  }, [query.cacheId, argsKey]);
 
   const refresh = useCallback(() => {
-    query.invalidate(...argsRef.current)
-    // tick is bumped via the subscription listener
+    query.invalidate(...argsRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [argsKey])
+  }, [query, argsKey]);
 
-  const setData = useCallback((next: R | ((prev: R | undefined) => R)) => {
-    return setQueryData(query.cacheId, keyRef.current, next)
-  }, [query.cacheId])
+  const setData = useCallback(
+    (next: R | ((prev: R | undefined) => R)) => setQueryData<R>(query.cacheId, keyRef.current, next),
+    [query.cacheId],
+  );
 
-  return { ...state, refresh, setData }
+  return { ...view, refresh, setData };
 }
