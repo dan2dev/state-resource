@@ -19,6 +19,7 @@ React is an optional peer dependency. The core cache (`createQuery` / `invalidat
 - Promise-level request deduplication by argument key
 - Stale-while-revalidate behavior in `useQuery`
 - Per-entry refresh and global invalidation
+- Automatic `AbortController` support for aborting in-flight requests
 - Shared state mutation via `useQuery(...).setData(...)`
 - Fully typed APIs (arguments and data inferred end-to-end)
 - Works without React for cache-only use cases
@@ -82,7 +83,10 @@ Returns a `Query<A, R>` — a callable function with extra methods:
 | --- | --- |
 | `query(...args)` | Returns cached promise for args, or starts a new fetch |
 | `query.invalidate(...args)` | Refetches one cache entry and notifies listeners for that key |
-| `query.clear()` | Clears all cached promises, refetchers, and snapshots for this `cacheId` |
+| `query.abort(...args)` | Aborts one in-flight request for these args and removes it from cache |
+| `query.abort()` | Aborts all in-flight requests for this query |
+| `query.abortAll()` | Aborts all in-flight requests for this query |
+| `query.clear()` | Clears all cached promises, refetchers, snapshots, and aborts in-flight requests for this `cacheId` |
 | `query.cacheId` | Read-only cache ID |
 
 **Caching is argument-based.** The same arguments always return the same promise. Object argument key order is normalized, so `{ a: 1, b: 2 }` and `{ b: 2, a: 1 }` hit the same cache entry.
@@ -93,6 +97,41 @@ userQuery(1) !== userQuery(2)  // different args → different entries
 ```
 
 **Failed promises are evicted automatically**, so the next call re-fetches cleanly without manual cleanup.
+
+#### Abort support
+
+`state-resource` creates an internal `AbortController` for each in-flight query entry. You do not need to add an `AbortSignal` parameter to your query function.
+
+```ts
+const userQuery = createQuery('users', async (id: number) => {
+  const res = await fetch(`/api/users/${id}`)
+  return res.json() as Promise<User>
+})
+
+// Abort one entry
+userQuery.abort(1)
+
+// Abort every in-flight entry for this query
+userQuery.abort()
+userQuery.abortAll()
+```
+
+You can also abort globally by cache ID:
+
+```ts
+import { abort } from 'state-resource'
+
+abort('users')     // abort every in-flight users entry
+abort('users', 1)  // abort only users(1)
+```
+
+Queries are also aborted when:
+
+- `query.invalidate(...args)` starts a newer request for the same key
+- `query.clear()` clears the query
+- the last `useQuery` subscriber for a key unsubscribes, such as on unmount or args change
+
+Aborted query promises reject with an `AbortError`, are removed from cache, and do not publish an error snapshot. Since query functions do not receive a signal, aborting prevents `state-resource` from using the result but does not physically cancel an underlying `fetch` request.
 
 ---
 
@@ -483,6 +522,7 @@ useQuery(userQuery, ['not-a-number']) // ✗ Argument of type 'string' is not as
 
 ```ts
 import {
+  abort,
   createQuery,
   invalidate,
   useQuery,
